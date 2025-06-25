@@ -1,0 +1,120 @@
+#include <WiFi.h>
+#include <WebServer.h>
+
+// Replace these with your network credentials
+const char* ssid = "Josue's phone";
+const char* password = "magana75";
+
+// Create a web server on port 80
+WebServer server(80);
+
+// Define LED pins (avoiding pin 0)
+const int ledPins[6] = {10, 8, 6, 4, 2, 7};  // Changed pin 0 to 7
+
+// Braille patterns for letters 'a' to 'z' and numbers '0' to '9'
+const byte braillePatterns[37] = {
+  0b100000, 0b101000, 0b110000, 0b110100, 0b100100, 0b111000, 0b111100, 
+  0b101100, 0b011000, 0b011100, 0b100010, 0b101010, 0b110010, 0b110110, 
+  0b100110, 0b111010, 0b111110, 0b101110, 0b011010, 0b011110, 0b100011, 
+  0b101011, 0b011101, 0b110011, 0b110111, 0b100111, 0b001111, 0b101011, 
+  0b110011, 0b110111, 0b100111, 0b111011, 0b111111, 0b101111, 0b011111, 
+  0b001011
+};
+
+// Function to handle incoming text via the web server
+void handleText() {
+  if (server.hasArg("text")) {
+    String receivedText = server.arg("text");
+    Serial.print("Received text: ");
+    Serial.println(receivedText);
+    
+    // Convert the received text into Braille and display
+    receivedText.trim();
+    receivedText.toLowerCase();
+    if (receivedText.length() > 0) {
+      for (int i = 0; i < receivedText.length(); i++) {
+        char character = receivedText[i];
+        displayBraille(character);  // Display Braille pattern for the character
+        delay(1000);  // Keep the output for 1 second
+      }
+    }
+  }
+  // Send a response back to the client (Raspberry Pi)
+  server.send(200, "text/plain", "Text received on ESP32 and converted to Braille binary!");
+}
+
+// Setup function to initialize Wi-Fi and the web server
+void setup() {
+  Serial.begin(115200);
+  
+  // Initialize LED pins (if using LEDs)
+  for (int i = 0; i < 6; i++) {
+    pinMode(ledPins[i], OUTPUT);
+  }
+  turnOffAllLEDs();  // Ensure all LEDs are off initially
+
+  // Connect to Wi-Fi
+  WiFi.begin(ssid, password);
+  while (WiFi.status() != WL_CONNECTED) {
+    delay(500);
+    Serial.print(".");
+  }
+  Serial.println("\nWiFi connected!");
+  Serial.print("IP address: ");
+  Serial.println(WiFi.localIP()); // Print the IP address
+
+  // Set up the route for receiving text
+  server.on("/text", handleText);
+
+  // Start the server
+  server.begin();
+  Serial.println("Server started.");
+}
+
+// Main loop to handle incoming web requests
+void loop() {
+  server.handleClient();  // Handle incoming requests
+}
+
+// Function to display Braille binary for a letter or number
+void displayBraille(char character) {
+  String output = "";
+  
+  // Check if the character is a valid letter or number
+  if (character >= 'a' && character <= 'z') {
+    int index = character - 'a';  
+    byte pattern = braillePatterns[index];  // Get Braille pattern for letter
+
+    // Build the output string based on the Braille pattern
+    for (int i = 0; i < 6; i++) {
+      output += (pattern & (1 << (5 - i))) ? '1' : '0';  // Check if the bit is set
+    }
+  } else if (character >= '0' && character <= '9') {
+    // Output the number sign before the digit
+    output += "001111";  // Braille representation for number sign
+    int index = character - '0' + 26;  
+    byte pattern = braillePatterns[index];  // Get Braille pattern for number
+
+    // Build the output string based on the Braille pattern
+    for (int i = 0; i < 6; i++) {
+      output += (pattern & (1 << (5 - i))) ? '1' : '0';  // Check if the bit is set
+    }
+  } else {
+    output = "000000";  // Output zeros for invalid characters
+  }
+
+  // Output the pattern to the Serial Monitor
+  Serial.println("Braille for '" + String(character) + "': " + output);
+
+  // If you have LEDs connected, display the pattern using LEDs
+  for (int i = 0; i < 6; i++) {
+    digitalWrite(ledPins[i], (output[i] == '1') ? HIGH : LOW);  // Set LEDs based on the binary pattern
+  }
+}
+
+// Function to turn off all LEDs (optional for LED control)
+void turnOffAllLEDs() {
+  for (int i = 0; i < 6; i++) {
+    digitalWrite(ledPins[i], LOW);  // Turn off all LEDs
+  }
+}
