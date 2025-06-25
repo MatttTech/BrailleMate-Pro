@@ -1,0 +1,35 @@
+import os
+import sys
+import time
+import pygame
+from gtts import gTTS
+
+# Initialize pygame mixer
+pygame.mixer.init()
+
+# Function to convert text to speech
+def text_to_speech(text):
+    language = 'en'
+    # Create gTTS object
+    speech = gTTS(text=text, lang=language, slow=False)
+    audio_file = "output.mp3"
+    speech.save(audio_file)
+
+    # Play the audio file
+    pygame.mixer.music.load(audio_file)
+    pygame.mixer.music.play()
+
+    # Wait until the audio finishes playing
+    while pygame.mixer.music.get_busy():
+        time.sleep(0.1)
+
+    # Optionally delete the audio file
+    os.remove(audio_file)
+
+if __name__ == "__main__":
+    if len(sys.argv) > 1:
+        input_text = " ".join(sys.argv[1:])
+        print(f"Converting to speech: {input_text}")
+        text_to_speech(input_text)
+    else:
+        print("Please provide text as a command line argument.")
