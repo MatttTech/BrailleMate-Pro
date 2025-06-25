@@ -1,0 +1,119 @@
+// Define LED pins (avoiding pin 0)
+const int ledPins[6] = {10, 8, 6, 4, 2, 7};  // Changed pin 0 to 7
+
+// Braille patterns for letters 'a' to 'z' and numbers '0' to '9'
+// 6-bit pattern where each bit represents an LED (1 = on, 0 = off)
+const byte braillePatterns[37] = {
+  0b100000, // a
+  0b101000, // b
+  0b110000, // c
+  0b110100, // d
+  0b100100, // e
+  0b111000, // f
+  0b111100, // g
+  0b101100, // h
+  0b011000, // i
+  0b011100, // j
+  0b100010, // k
+  0b101010, // l
+  0b110010, // m
+  0b110110, // n
+  0b100110, // o
+  0b111010, // p
+  0b111110, // q
+  0b101110, // r
+  0b011010, // s
+  0b011110, // t
+  0b100011, // u
+  0b101011, // v
+  0b011101, // w
+  0b110011, // x
+  0b110111, // y
+  0b100111, // z
+  0b001111, // number sign (Braille representation)
+  0b101011, // 1
+  0b110011, // 2
+  0b110111, // 3
+  0b100111, // 4
+  0b111011, // 5
+  0b111111, // 6
+  0b101111, // 7
+  0b011111, // 8
+  0b001011  // 9
+};
+
+void setup() {
+  // Initialize serial communication
+  Serial.begin(9600);
+  
+  // Initialize LED pins as outputs
+  for (int i = 0; i < 6; i++) {
+    pinMode(ledPins[i], OUTPUT);
+  }
+
+  // Turn off all LEDs initially
+  turnOffAllLEDs();
+
+  Serial.println("Enter a word or numbers to display in Braille:");
+}
+
+void loop() {
+  // Check if there is input from Serial
+  if (Serial.available() > 0) {
+    String input = Serial.readStringUntil('\n');  // Read the input
+    input.trim();  // Remove any leading or trailing spaces/newlines
+    input.toLowerCase();  // Convert to lowercase
+
+    if (input.length() > 0) {
+      for (int i = 0; i < input.length(); i++) {
+        char character = input[i];
+        displayBraille(character);  // Display Braille pattern for the character
+        delay(1000);  // Keep the output for 1 second
+      }
+    }
+
+    Serial.println("Enter another word or numbers to display in Braille:");
+  }
+}
+
+// Function to display Braille character
+void displayBraille(char character) {
+  // Create an array to hold the dot pattern
+  String output = "";
+
+  // Check if the character is a valid letter or number
+  if (character >= 'a' && character <= 'z') {
+    // Convert letter to an index (0-25)
+    int index = character - 'a';  
+    byte pattern = braillePatterns[index];  // Get Braille pattern for letter
+
+    // Build the output string based on the Braille pattern
+    for (int i = 0; i < 6; i++) {
+      output += (pattern & (1 << (5 - i))) ? '1' : '0'; // Check if the bit is set
+    }
+  } else if (character >= '0' && character <= '9') {
+    // Output the number sign before the digit
+    output += "011111";  // Braille representation for number sign
+    // Convert number to an index (26-35)
+    int index = character - '0' + 26;  
+    byte pattern = braillePatterns[index];  // Get Braille pattern for number
+
+    // Build the output string based on the Braille pattern
+    for (int i = 0; i < 6; i++) {
+      output += (pattern & (1 << (5 - i))) ? '1' : '0'; // Check if the bit is set
+    }
+  } else {
+    // Output zeros for invalid characters
+    output = "000000";  // All dots flat
+  }
+
+  // Output the pattern to the Serial Monitor
+  Serial.println("Braille for '" + String(character) + "': " + output);
+}
+
+// Function to turn off all LEDs
+void turnOffAllLEDs() {
+  for (int i = 0; i < 6; i++) {
+    digitalWrite(ledPins[i], LOW);  // Turn off all LEDs
+  }
+}
