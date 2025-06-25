@@ -1,0 +1,148 @@
+#include <WiFi.h>
+#include <WebServer.h>
+
+// Wi-Fi credentials
+const char* ssid = "Josue's phone";
+const char* password = "magana75";
+
+// Web server on port 80
+WebServer server(80);
+
+// Define solenoid pins for four Braille cells (6 pins per cell)
+const int solenoidPins[24] = {14, 13, 12, 11, 10, 9, 8, 7, 6, 5, 4, 3, 15, 16, 17, 18, 19, 20, 21, 35, 36, 37, 38, 39};
+
+// Braille patterns for letters 'a' to 'z'
+const byte braillePatterns[26] = {
+  0b100000, 0b101000, 0b110000, 0b110100, 0b100100, 0b111000, 0b111100, 
+  0b101100, 0b011000, 0b011100, 0b100010, 0b101010, 0b110010, 0b110110, 
+  0b100110, 0b111010, 0b111110, 0b101110, 0b011010, 0b011110, 0b100011, 
+  0b101011, 0b011101, 0b110011, 0b110111, 0b100111
+};
+
+// Function to handle incoming text via the web server
+void handleText() {
+  if (server.hasArg("text")) {
+    String receivedText = server.arg("text");
+    Serial.print("Received text: ");
+    Serial.println(receivedText);
+    
+    // Convert received text into Braille patterns and display
+    receivedText.trim();
+    receivedText.toLowerCase();
+    if (receivedText.length() > 0) {
+      for (int i = 0; i < receivedText.length(); i += 4) {
+        char characters[4] = {
+          (i < receivedText.length()) ? receivedText[i] : ' ',
+          (i + 1 < receivedText.length()) ? receivedText[i + 1] : ' ',
+          (i + 2 < receivedText.length()) ? receivedText[i + 2] : ' ',
+          (i + 3 < receivedText.length()) ? receivedText[i + 3] : ' '
+        };
+
+        Serial.print("Displaying: ");
+        for (int j = 0; j < 4; j++) {
+          Serial.print(characters[j]);
+          Serial.print(" ");
+        }
+        Serial.println();
+
+        displayBrailleWithMovement(characters);
+        delay(500);  // Small delay before next display
+      }
+    }
+  }
+  // Send response back to the client (Raspberry Pi)
+  server.send(200, "text/plain", "Text received on ESP32 and displayed with solenoids.");
+}
+
+// Initialize Wi-Fi, web server, and solenoids
+void setup() {
+  Serial.begin(115200);
+  
+  for (int i = 0; i < 24; i++) {
+    pinMode(solenoidPins[i], OUTPUT);
+    digitalWrite(solenoidPins[i], LOW);
+  }
+  turnOffAllSolenoids();
+
+  WiFi.begin(ssid, password);
+  while (WiFi.status() != WL_CONNECTED) {
+    delay(500);
+    Serial.print(".");
+  }
+  Serial.println("\nWiFi connected!");
+  Serial.print("IP address: ");
+  Serial.println(WiFi.localIP());
+
+  server.on("/text", handleText);
+  server.begin();
+  Serial.println("Server started.");
+}
+
+// Main loop to handle incoming web requests
+void loop() {
+  server.handleClient();
+}
+
+// Display Braille binary with solenoid movement
+void displayBrailleWithMovement(char characters[4]) {
+  byte patterns[4];
+
+  for (int i = 0; i < 4; i++) {
+    int index = getBrailleIndex(characters[i]);
+    patterns[i] = (index != -1) ? braillePatterns[index] : 0;
+  }
+
+  // Move solenoids for each character
+  for (int i = 0; i < 4; i++) {
+    Serial.print("Character ");
+    Serial.print(i + 1);
+    Serial.print(" pattern: ");
+    Serial.println(patterns[i], BIN);
+
+    for (int j = 0; j < 6; j++) {
+      int pinIndex = i * 6 + j;
+      if (patterns[i] & (1 << (5 - j))) {
+        digitalWrite(solenoidPins[pinIndex], HIGH);
+        Serial.print("Pin ");
+        Serial.print(solenoidPins[pinIndex]);
+        Serial.println(" HIGH");
+      } else {
+        digitalWrite(solenoidPins[pinIndex], LOW);
+        Serial.print("Pin ");
+        Serial.print(solenoidPins[pinIndex]);
+        Serial.println(" LOW");
+      }
+    }
+  }
+
+  delay(5000);  // Display Braille for 5 seconds
+  turnOffAllSolenoids();
+}
+
+// Function to activate solenoid with movement
+void activateSolenoid(int pin, bool state) {
+  digitalWrite(pin, state);
+  delay(200);  // Hold time for solenoid movement
+  digitalWrite(pin, LOW); // Turn solenoid off to reset position
+}
+
+// Turn off all solenoids
+void turnOffAllSolenoids() {
+  for (int i = 0; i < 24; i++) {
+    digitalWrite(solenoidPins[i], LOW);
+  }
+  Serial.println("All solenoids OFF");
+}
+
+// Helper function to get the Braille index
+int getBrailleIndex(char character) {
+  if (character >= 'a' && character <= 'z') {
+    return character - 'a';
+  }
+  return -1;
+}
+
+// Helper function to check valid character
+bool isValidChar(char character) {
+  return (character >= 'a' && character <= 'z');
+}
